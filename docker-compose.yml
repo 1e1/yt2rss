@@ -1,0 +1,24 @@
+version: "3.8"
+services:
+  yt2rss:
+    build: .
+    container_name: yt2rss
+    volumes:
+      - ./data:/data
+    ports:
+      - "2777:8000"
+    environment:
+      # YT2RSS_CACHE_MODE = "disk" | "memcache" | "none"
+      # YT2RSS_MEMCACHE_HOST = "memlocal"
+      # YT2RSS_MEMCACHE_PORT = "11211"
+      YT2RSS_CHANNEL_TTL: "3666"
+      YT2RSS_MAX_ITEMS: "5"
+      YT2RSS_MAX_HEIGHT: "720"
+    restart: unless-stopped
+  memcached:
+    image: memcached
+    command:
+      - --conn-limit=128
+      - --memory-limit=64
+      - --threads=4
+    restart: unless-stopped
