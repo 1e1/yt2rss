@@ -1,0 +1,351 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>yt2rss — YouTube to RSS</title>
+<style>
+  :root{
+    --bg:#0f1720;
+    --card:#0b1220;
+    --muted:#9aa4b2;
+    --accent:#8dd3c7;
+    --glass: rgba(255,255,255,0.03);
+    font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+  }
+  html,body{height:100%}
+  body{
+    margin:0;
+    background:linear-gradient(180deg,#071226 0%, #0b1624 100%);
+    color:#e6eef6;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding:32px;
+    -webkit-font-smoothing:antialiased;
+    -moz-osx-font-smoothing:grayscale;
+  }
+
+  .wrap{
+    width:100%;
+    max-width:760px;
+    background:var(--card);
+    border-radius:14px;
+    padding:22px;
+    box-shadow: 0 6px 30px rgba(2,6,23,0.6);
+    border:1px solid rgba(255,255,255,0.03);
+  }
+
+  h1{
+    margin:0 0 10px 0;
+    font-size:18px;
+    font-weight:600;
+    color:#fff;
+  }
+  p.lead{
+    margin:0 0 18px 0;
+    color:var(--muted);
+    font-size:13px;
+  }
+
+  .result-row{
+    display:flex;
+    gap:8px;
+    align-items:center;
+  }
+
+  input.output{
+    flex:1;
+    padding:10px 12px;
+    border-radius:10px;
+    border:1px solid rgba(255,255,255,0.04);
+    background:var(--glass);
+    color: #dff3ef;
+    font-size:2em;
+    direction:rtl;
+    text-align:left;
+    unicode-bidi:plaintext;
+    outline:none;
+    caret-color: transparent;
+  }
+
+  .btn{
+    display:inline-flex;
+    align-items:center;
+    gap:8px;
+    padding:8px 10px;
+    border-radius:10px;
+    background:transparent;
+    border:1px solid rgba(255,255,255,0.04);
+    color:var(--muted);
+    font-size:13px;
+    cursor:pointer;
+  }
+  .btn:active{transform:translateY(1px)}
+  .btn.small{padding:6px 8px;font-size:12px}
+
+  .preview{
+    margin-top:18px;
+    padding:14px;
+    border-radius:10px;
+    background:rgba(255,255,255,0.02);
+    border:1px solid rgba(255,255,255,0.02);
+    min-height:86px;
+  }
+  .orig-link{
+    display:block;
+    font-size:13px;
+    color:var(--accent);
+    word-break:break-all;
+    margin-bottom:8px;
+  }
+  .hint{
+    color:var(--muted);
+    font-size:13px;
+  }
+
+  .video-embed{
+    margin-top:8px;
+    width:100%;
+    height:320px;
+    border-radius:8px;
+    border:0;
+    background:#000;
+  }
+
+  footer.small{
+    margin-top:12px;
+    color:var(--muted);
+    font-size:12px;
+  }
+
+  /* subtle focus */
+  input.output:focus{ box-shadow:0 0 0 4px rgba(141,211,199,0.06); border-color: rgba(141,211,199,0.15); }
+  .btn:focus{ outline:none; box-shadow:0 0 0 4px rgba(141,211,199,0.05); border-color: rgba(141,211,199,0.12) }
+</style>
+</head>
+<body>
+  <div class="wrap" role="application" aria-label="YouTube to RSS transformer">
+    <h1>yt2rss — YouTube to RSS</h1>
+
+    <div class="result-row" aria-live="polite">
+      <input id="transformed" class="output" readonly aria-label="Transformed RSS URL" placeholder="Paste a YouTube URL anywhere (Ctrl+V)…" />
+      <button id="copyBtn" class="btn small" title="Copy transformed URL" disabled>Copy</button>
+      <button id="openBtn" class="btn small" title="Open transformed URL" disabled>Open</button>
+    </div>
+
+    <div id="preview" class="preview" aria-live="polite">
+      <span id="origLink" class="orig-link">Waiting for paste...</span>
+      <div id="previewArea">
+        <div class="hint">Paste a YouTube channel or handle (for example <code>https://www.youtube.com/@handle</code>) or a video URL.</div>
+      </div>
+    </div>
+
+    <footer class="small">Host used for transformation: <code id="hostUsed"></code></footer>
+  </div>
+
+<script>
+(function(){
+  const transformedInput = document.getElementById('transformed');
+  const copyBtn = document.getElementById('copyBtn');
+  const openBtn = document.getElementById('openBtn');
+  const origLink = document.getElementById('origLink');
+  const previewArea = document.getElementById('previewArea');
+  const hostUsedEl = document.getElementById('hostUsed');
+
+  // Use the page origin as the host prefix for transformed URLs
+  const hostPrefix = window.location.origin.replace(/\/$/, '');
+  hostUsedEl.textContent = hostPrefix;
+
+  // Utility: normalize and parse a URL string into URL object if possible
+  function tryParseUrl(text){
+    try {
+      // Some users paste URLs without protocol (like youtube.com/..). Try to fix:
+      if (/^[a-zA-Z0-9\-]+\.[a-zA-Z]{2,}\/?/.test(text) && !/^[a-zA-Z]+:\/\//.test(text)) {
+        text = 'https://' + text;
+      }
+      return new URL(text.trim());
+    } catch(e){
+      return null;
+    }
+  }
+
+  // Extract video id if URL is a video (watch?v= or youtu.be)
+  function extractYouTubeVideoId(url){
+    try {
+      if (!url) return null;
+      const host = url.hostname.toLowerCase();
+      if (host === 'youtu.be') {
+        const p = url.pathname.split('/').filter(Boolean);
+        return p[0] || null;
+      }
+      if (host.endsWith('youtube.com') || host.endsWith('youtube-nocookie.com')) {
+        // watch?v=
+        const v = url.searchParams.get('v');
+        if (v) return v;
+        // /embed/ID
+        const parts = url.pathname.split('/').filter(Boolean);
+        const embedIndex = parts.indexOf('embed');
+        if (embedIndex !== -1 && parts[embedIndex+1]) return parts[embedIndex+1];
+      }
+      return null;
+    } catch(e){
+      return null;
+    }
+  }
+
+  // Main transformer according to the four patterns
+  function transformYouTubeToRss(urlObj){
+    if (!urlObj) return null;
+    const host = urlObj.hostname.toLowerCase();
+    // only proceed for youtube domains (and subdomains)
+    if (!/youtube\.com$/.test(host) && host !== 'youtu.be' && !/youtube-nocookie\.com$/.test(host)) {
+      return null;
+    }
+
+    const path = urlObj.pathname || '/';
+    const segments = path.split('/').filter(Boolean); // array of path segments
+    // handle @handle (first segment starts with @)
+    if (segments.length && segments[0].startsWith('@')) {
+      const handle = segments[0].slice(1); // remove leading @
+      if (handle) return hostPrefix + '/_user/' + encodeURIComponent(handle) + '.rss';
+    }
+
+    // /c/Name
+    if (segments.length >= 2 && segments[0].toLowerCase() === 'c') {
+      const name = segments[1];
+      if (name) return hostPrefix + '/c/' + encodeURIComponent(name) + '.rss';
+    }
+
+    // /channel/ID
+    if (segments.length >= 2 && segments[0].toLowerCase() === 'channel') {
+      const id = segments[1];
+      if (id) return hostPrefix + '/channel/' + encodeURIComponent(id) + '.rss';
+    }
+
+    // /user/Name
+    if (segments.length >= 2 && segments[0].toLowerCase() === 'user') {
+      const name = segments[1];
+      if (name) return hostPrefix + '/user/' + encodeURIComponent(name) + '.rss';
+    }
+
+    // Some pages use the @handle as second segment like /@handle/videos — caught above by startsWith
+    // If nothing matched, return null
+    return null;
+  }
+
+  // Update UI with original and transformed
+  function setResult(originalText){
+    const urlObj = tryParseUrl(originalText);
+    previewArea.innerHTML = ''; // clear
+    if (!urlObj) {
+      origLink.textContent = String(originalText).trim();
+      previewArea.innerHTML = '<div class="hint">Not a valid URL. Please paste a YouTube URL (e.g. https://www.youtube.com/@handle or https://www.youtube.com/channel/ID).</div>';
+      transformedInput.value = '';
+      copyBtn.disabled = true;
+      openBtn.disabled = true;
+      return;
+    }
+
+    const normalized = urlObj.href;
+    origLink.innerHTML = `<a href="${escapeHtml(normalized)}" target="_blank" rel="noopener noreferrer">${escapeHtml(normalized)}</a>`;
+
+    // If it's a video URL, embed the video player
+    const videoId = extractYouTubeVideoId(urlObj);
+    if (videoId) {
+      const iframe = document.createElement('iframe');
+      iframe.className = 'video-embed';
+      iframe.setAttribute('allowfullscreen','');
+      iframe.setAttribute('loading','lazy');
+      iframe.src = 'https://www.youtube.com/embed/' + encodeURIComponent(videoId);
+      previewArea.appendChild(iframe);
+    } else {
+      // Non-video: show a simple preview hint
+      const hint = document.createElement('div');
+      hint.className = 'hint';
+      hint.textContent = 'This looks like a channel/handle URL. The transformed RSS URL (if matched) is shown above.';
+      previewArea.appendChild(hint);
+    }
+
+    // Transform
+    const transformed = transformYouTubeToRss(urlObj);
+    if (transformed) {
+      transformedInput.value = transformed;
+      copyBtn.disabled = false;
+      openBtn.disabled = false;
+      // auto-select the text so user can immediately copy
+      // small timeout ensures element exists and selection will work
+      setTimeout(()=> {
+        try {
+          transformedInput.focus();
+          transformedInput.select();
+        } catch(e){}
+      }, 40);
+    } else {
+      transformedInput.value = '';
+      copyBtn.disabled = true;
+      openBtn.disabled = true;
+      // show helpful guidance if URL didn't match any pattern
+      const more = document.createElement('div');
+      more.className = 'hint';
+      more.style.marginTop = '8px';
+      more.innerHTML = 'No transform rule matched. Supported patterns:<ul style="margin:6px 0 0 18px;color:var(--muted)"><li><code>/@handle</code></li><li><code>/c/Name</code></li><li><code>/channel/ID</code></li><li><code>/user/Name</code></li></ul>';
+      previewArea.appendChild(more);
+    }
+  }
+
+  // Copy button handler
+  copyBtn.addEventListener('click', async function(){
+    if (!transformedInput.value) return;
+    try {
+      await navigator.clipboard.writeText(transformedInput.value);
+      // provide a small ephemeral feedback
+      const old = copyBtn.textContent;
+      copyBtn.textContent = 'Copied ✓';
+      setTimeout(()=> copyBtn.textContent = old, 1200);
+    } catch(e){
+      // fallback: select and execCommand
+      transformedInput.select();
+      try {
+        document.execCommand('copy');
+        const old = copyBtn.textContent;
+        copyBtn.textContent = 'Copied ✓';
+        setTimeout(()=> copyBtn.textContent = old, 1200);
+      } catch(err){
+        alert('Copy failed — select the URL and copy manually.');
+      }
+    }
+  });
+
+  // Open button handler
+  openBtn.addEventListener('click', function(){
+    if (!transformedInput.value) return;
+    window.open(transformedInput.value, '_blank', 'noopener');
+  });
+
+  // Listen for paste anywhere on the page (user does only that)
+  window.addEventListener('paste', function(ev){
+    // get text from clipboard event (works even without async clipboard permission)
+    const text = (ev.clipboardData && ev.clipboardData.getData) ? ev.clipboardData.getData('text') : '';
+    if (text && text.trim().length > 0) {
+      ev.preventDefault && ev.preventDefault();
+      setResult(text.trim());
+    }
+  }, {capture:false});
+
+  // Also provide a tiny convenience: if user clicks the input, select all
+  transformedInput.addEventListener('focus', ()=> transformedInput.select());
+
+  // Basic escaping
+  function escapeHtml(s){ return String(s).replace(/[&<>"']/g, function(m){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]; }); }
+
+  // Optional: if someone pastes via middle-click on Linux or other ways, handle beforeunload?
+  // No further actions required.
+
+  // Accessibility: announce instructions in console for powerusers
+  console.log('yt2rss — YouTube to RSS ready. Paste a YouTube URL (Ctrl/Cmd+V).');
+
+})();
+</script>
+</body>
+</html>

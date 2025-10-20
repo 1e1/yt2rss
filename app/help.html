@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>yt2rss — YouTube to RSS</title>
+    <style>
+        body { padding: 20px; background: #f8f8f8; color: #111; }
+        h1 { color: #c4302b; }
+        a { color: #065fd4; text-decoration: none; }
+        a:hover { text-decoration: underline; }
+        code { background: #eee; padding: 2px 4px; border-radius: 3px; }
+        section { margin-bottom: 24px; }
+    </style>
+</head>
+<body>
+    <h1>yt2rss — YouTube to RSS</h1>
+
+    <section>
+        <p><strong>Purpose:</strong> Convert YouTube channels or videos into RSS feeds suitable for podcast apps.</p>
+        <p>Subscribe to YouTube channels as a podcast, download videos on the fly, no storage required.</p>
+    <section>
+
+    <section>
+        <h2>API Endpoints</h2>
+        <ul>
+            <li><code>/{{CHANNEL_URL}}.rss</code> — Returns an RSS feed for the channel.</li>
+            <li><code>/video/{{VIDEO_ID}}.mp4</code> — Streams the video directly for podcast apps.</li>
+            <li><a href="/extra/extensions/subcRiSS/firefox.zip">Firefox extension</a></li>
+            <li><a href="/extra/extensions/subcRiSS/chrome.zip">Chrome-compatible extension</a></li>
+        </ul>
+        <p>Supports channel URLs like <code>@handle</code> (served via <code>/_user/handle.rss</code>) or <code>/c/Name</code>.</p>
+    </section>
+
+    <section>
+        <h2>Documentation</h2>
+        <p>Interactive API docs available at <a href="/docs">/docs</a> (Swagger UI).</p>
+    </section>
+
+    <section>
+        <h2>Usage</h2>
+        <ol>
+            <li>
+                Install <a href="/extra/extensions/subcRiSS/firefox.zip">subcRiSS Firefox extension</a>
+                (or <a href="/extra/extensions/subcRiSS/chrome.zip">Chrome version</a>).
+                <ul>
+                    <li>Open Firefox and go to <code>about:debugging#/runtime/this-firefox</code></li>
+                    <li>Click "Load Temporary Add-on".</li>
+                    <li>Select subcRiSS.zip or manifest.json.</li>
+                </ul>
+            </li>
+            <li>
+                Configure your NAS base URL in the extension options.
+            </li>
+            <li>
+                Visit a YouTube video or channel, click the button, and get your RSS feed URL.
+            </li>
+        </ol>
+    </section>
+</body>
+</html>
