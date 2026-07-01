@@ -1,22 +1,29 @@
-version: "3.8"
 services:
   yt2rss:
     build: .
     container_name: yt2rss
     volumes:
-      - ./data:/data
+      - ./_DATA:/data
     ports:
       - "2777:8000"
     environment:
-      # YT2RSS_CACHE_MODE = "disk" | "memcache" | "none"
-      # YT2RSS_MEMCACHE_HOST = "memlocal"
-      # YT2RSS_MEMCACHE_PORT = "11211"
+      # Cache backend: "disk" | "memcache" | "none"
+      YT2RSS_CACHE_MODE: "memcache"
+      YT2RSS_MEMCACHE_HOST: "memcached"
+      YT2RSS_MEMCACHE_PORT: "11211"
       YT2RSS_CHANNEL_TTL: "3666"
+      YT2RSS_VIDEO_TTL: "3600"
       YT2RSS_MAX_ITEMS: "5"
       YT2RSS_MAX_HEIGHT: "720"
+      # LAN announcement over mDNS. Multicast does not cross the bridge network,
+      # so enabling this only reaches the physical LAN with `network_mode: host`.
+      YT2RSS_MDNS_ENABLED: "false"
+    depends_on:
+      - memcached
     restart: unless-stopped
+
   memcached:
-    image: memcached
+    image: memcached:1-alpine
     command:
       - --conn-limit=128
       - --memory-limit=64

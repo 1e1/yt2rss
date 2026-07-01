@@ -1,89 +1,120 @@
 # app/core.py
-import os
 import asyncio
-import tempfile
-import httpx
+import os
 import re
-from datetime import datetime
-import email.utils
-from fastapi import APIRouter, Request, Query, HTTPException, Response
+import tempfile
+
+import httpx
+from cache import get_cache, set_cache
+from fastapi import APIRouter, HTTPException, Query, Request, Response
 from fastapi.responses import StreamingResponse
-from main import (
-    get_cache, set_cache,
-    logger,
-    TMP_DIR
-)
+from settings import TMP_DIR, logger
 from yt_dlp import YoutubeDL
 
 # -------- Configuration ----------
 RSS_MAX_ITEMS = int(os.environ.get("YT2RSS_MAX_ITEMS", "10"))
 DEFAULT_VIDEO_HEIGHT = int(os.environ.get("YT2RSS_MAX_HEIGHT", "720"))
+# Signed googlevideo URLs expire after a few hours; keep their cache short so we
+# never hand out a stale (403) link. Defaults to 1h.
+VIDEO_CACHE_TTL = int(os.environ.get("YT2RSS_VIDEO_TTL", "3600"))
+# Max bytes the /video proxy will stream/store per request. 0 = unlimited.
+MAX_VIDEO_BYTES = int(os.environ.get("YT2RSS_MAX_VIDEO_BYTES", "0"))
+
+
+def _exceeds_limit(nbytes: int | None) -> bool:
+    return bool(MAX_VIDEO_BYTES) and bool(nbytes) and nbytes > MAX_VIDEO_BYTES
+
 
 YDL_OPTS = {"quiet": True, "skip_download": True, "no_warnings": True}
 
-def xml_escape(text: Optional[str]) -> str:
+
+def xml_escape(text: str | None) -> str:
     if not text:
         return ""
-    return (text.replace("&", "&amp;")
-                .replace("<", "&lt;")
-                .replace(">", "&gt;")
-                .replace('"', "&quot;")
-                .replace("'", "&apos;"))
+    return (
+        text.replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace('"', "&quot;")
+        .replace("'", "&apos;")
+    )
+
+
+_VIDEO_ID_RE = re.compile(r"^[A-Za-z0-9_-]{6,20}$")
+
+
+def validate_video_id(video_id: str) -> str:
+    if not _VIDEO_ID_RE.match(video_id):
+        raise HTTPException(status_code=400, detail="Identifiant vidéo invalide")
+    return video_id
+
 
 def sanitize_filename(name: str) -> str:
     name = re.sub(r"\s+", " ", name.strip())
     name = re.sub(r'[<>:"/\\|?*]', "", name)
     return name[:200]
 
+
 def get_base_url(request: Request) -> str:
     return request.url.scheme + "://" + request.url.netloc
 
-def choose_combined_mp4(formats: List[Dict], max_height: int = DEFAULT_VIDEO_HEIGHT) -> Optional[Dict]:
+
+def choose_combined_mp4(formats: list[dict], max_height: int = DEFAULT_VIDEO_HEIGHT) -> dict | None:
     if not formats:
         return None
     candidates = [f for f in formats if f.get("vcodec") != "none" and f.get("acodec") != "none"]
     if not candidates:
         return None
+
     def score(f):
         ext = (f.get("ext") or "").lower()
         pref_ext = 0 if ext == "mp4" else 1
         height = f.get("height") or 0
         penalty = abs(height - max_height) + (5000 if height > max_height else 0)
         return (pref_ext, penalty, -height)
+
     return sorted(candidates, key=score)[0]
 
-def yt_extract_info_video(video_id: str, opts_extra: dict = None) -> Dict:
+
+def yt_extract_info_video(video_id: str, opts_extra: dict = None) -> dict:
     vcache_key = f"v_{video_id}"
     vinfo = get_cache(vcache_key)
     if not vinfo:
         url = f"https://www.youtube.com/watch?v={video_id}"
         vinfo = yt_extract_info_url(url, opts_extra)
-        set_cache(vcache_key, vinfo)
+        set_cache(vcache_key, vinfo, ttl=VIDEO_CACHE_TTL)
     return vinfo
-    
-def yt_extract_info_url(url: str, opts_extra: dict = None) -> Dict:
+
+
+def yt_extract_info_url(url: str, opts_extra: dict = None) -> dict:
     opts = dict(YDL_OPTS)
     if opts_extra:
         opts.update(opts_extra)
     with YoutubeDL(opts) as ydl:
         return ydl.extract_info(url, download=False)
 
+
 router = APIRouter(tags=["core"])
 
+
 @router.get("/playlist.rss")
-async def playlist_rss(request: Request, list: str = Query(...), max_items: int = Query(RSS_MAX_ITEMS)):
+async def playlist_rss(
+    request: Request, list: str = Query(...), max_items: int = Query(RSS_MAX_ITEMS)
+):
     base_url = get_base_url(request)
     playlist_url = f"https://www.youtube.com/playlist?list={list}"
     return await _generate_rss_for_collection(base_url, playlist_url, max_items)
 
+
 @router.get("/{path:path}.rss")
 async def dynamic_rss(request: Request, path: str, max_items: int = Query(RSS_MAX_ITEMS)):
     base_url = get_base_url(request)
+
     def ensure_videos_suffix(url: str) -> str:
         return url if url.endswith("/videos") else f"{url}/videos"
 
     if path.startswith("_user/"):
-        handle = path[len("_user/"):]
+        handle = path[len("_user/") :]
         target = ensure_videos_suffix(f"https://www.youtube.com/@{handle}")
     elif path.startswith("@"):
         target = ensure_videos_suffix(f"https://www.youtube.com/{path}")
@@ -94,10 +125,11 @@ async def dynamic_rss(request: Request, path: str, max_items: int = Query(RSS_MA
 
     return await _generate_rss_for_collection(base_url, target, max_items)
 
+
 async def _generate_rss_for_collection(base_url: str, target_url: str, max_items: int):
-    url_path = '/'.join(target_url.split('/')[3:])
-    if url_path.startswith('@'):
-        url_path = '_user/' + url_path[1:]
+    url_path = "/".join(target_url.split("/")[3:])
+    if url_path.startswith("@"):
+        url_path = "_user/" + url_path[1:]
     cache_key = f"rss::{url_path}::i{max_items}"
     cached = get_cache(cache_key)
     if cached:
@@ -117,8 +149,12 @@ async def _generate_rss_for_collection(base_url: str, target_url: str, max_items
     feed_title = xml_escape(info.get("title") or target_url)
     feed_desc = xml_escape(info.get("description") or f"Flux depuis {feed_title}")
     feed_link = info.get("webpage_url") or target_url
-    avatar_url = [thumb["url"] for thumb in info.get("thumbnails") if thumb.get("id") == "avatar_uncropped"]
-    feed_thumb = avatar_url[0] if avatar_url else None
+    avatar_url = [
+        thumb["url"]
+        for thumb in (info.get("thumbnails") or [])
+        if thumb.get("id") == "avatar_uncropped"
+    ]
+    feed_thumb = xml_escape(avatar_url[0]) if avatar_url else ""
 
     entries = [e for e in (info.get("entries") or [info]) if e][:max_items]
 
@@ -126,6 +162,7 @@ async def _generate_rss_for_collection(base_url: str, target_url: str, max_items
     if entries:
         first = entries[0]
         vid = first.get("id") or (first.get("url") or "").split("v=")[-1]
+
         async def warmup_video(video_id: str):
             try:
                 logger.info(f"[warmup] Pre-fetching video metadata for {video_id} ...")
@@ -143,14 +180,15 @@ async def _generate_rss_for_collection(base_url: str, target_url: str, max_items
         vid = e.get("id") or (e.get("url") or "").split("v=")[-1]
         title = xml_escape(e.get("title") or "Video")
         desc = xml_escape(e.get("description"))
-        redirect_url = f"{base_url}/redirect/{vid}.mp4" if base_url else f"/video/{redirect}.mp4"
-        dl_url = f"{base_url}/video/{vid}.mp4" if base_url else f"/video/{vid}.mp4"
+        link = xml_escape(e.get("url") or f"https://www.youtube.com/watch?v={vid}")
+        redirect_url = f"{base_url}/redirect/{vid}.mp4"
+        dl_url = f"{base_url}/video/{vid}.mp4"
         items += f"""
         <item>
           <title>{title}</title>
-          <link>{e.get("url")}</link>
-          <guid>y2rss::{vid}</guid>
-          <description><![CDATA[{desc} [proxy: {dl_url}]]]></description>
+          <link>{link}</link>
+          <guid isPermaLink="false">yt2rss::{vid}</guid>
+          <description>{desc} [proxy: {dl_url}]</description>
           <enclosure url="{redirect_url}" type="video/mp4" />
         </item>
         """
@@ -169,13 +207,14 @@ async def _generate_rss_for_collection(base_url: str, target_url: str, max_items
     set_cache(cache_key, {"xml": rss})
     return Response(content=rss.encode("utf-8"), media_type="text/xml")
 
+
 @router.get("/redirect/{video_id}.mp4")
 async def redirect_video_endpoint(video_id: str, height: int = Query(DEFAULT_VIDEO_HEIGHT)):
     """
     Renvoie une redirection HTTP vers la source MP4 originale sur YouTube.
     Utilise le même mécanisme de sélection que /video/{video_id}.mp4.
     """
-    video_url = f"https://www.youtube.com/watch?v={video_id}"
+    validate_video_id(video_id)
 
     try:
         info = yt_extract_info_video(video_id)
@@ -193,13 +232,15 @@ async def redirect_video_endpoint(video_id: str, height: int = Query(DEFAULT_VID
         status_code=302,
         headers={
             "Location": chosen["url"],
-            "Content-Disposition": f'attachment; filename="{filename}"'
-        }
+            "Content-Disposition": f'attachment; filename="{filename}"',
+        },
     )
     return response
 
+
 @router.get("/video/{video_id}.mp4")
 async def video_endpoint(video_id: str, height: int = Query(DEFAULT_VIDEO_HEIGHT)):
+    validate_video_id(video_id)
     video_url = f"https://www.youtube.com/watch?v={video_id}"
 
     try:
@@ -212,21 +253,37 @@ async def video_endpoint(video_id: str, height: int = Query(DEFAULT_VIDEO_HEIGHT
 
     chosen = choose_combined_mp4(info.get("formats") or [], height)
     if chosen and chosen.get("url") and (chosen.get("ext") == "mp4"):
+        # Reject early when the known size already exceeds the configured cap.
+        known_size = chosen.get("filesize") or chosen.get("filesize_approx")
+        if _exceeds_limit(known_size):
+            raise HTTPException(status_code=413, detail="Vidéo trop volumineuse")
+
         client = httpx.AsyncClient(timeout=None)
 
         async def stream():
+            sent = 0
             async with client.stream("GET", chosen["url"], follow_redirects=True) as r:
+                clen = r.headers.get("content-length")
+                if clen and _exceeds_limit(int(clen)):
+                    await client.aclose()
+                    return
                 async for chunk in r.aiter_bytes(256 * 1024):
+                    sent += len(chunk)
+                    if MAX_VIDEO_BYTES and sent > MAX_VIDEO_BYTES:
+                        logger.warning(
+                            f"[video] {video_id} exceeded {MAX_VIDEO_BYTES} bytes, truncating"
+                        )
+                        break
                     yield chunk
             await client.aclose()
 
         return StreamingResponse(
             stream(),
             media_type="video/mp4",
-            headers={"Content-Disposition": f'attachment; filename="{filename}"'}
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
         )
 
-    logger.info(f"[download] fallback tmp")
+    logger.info("[download] fallback tmp")
     # fallback: téléchargement temporaire
     tmpfd, tmp_path = tempfile.mkstemp(prefix="yt2rss_", suffix=".mp4", dir=TMP_DIR)
     os.close(tmpfd)
@@ -236,6 +293,8 @@ async def video_endpoint(video_id: str, height: int = Query(DEFAULT_VIDEO_HEIGHT
         "merge_output_format": "mp4",
         "quiet": True,
     }
+    if MAX_VIDEO_BYTES:
+        ydl_opts["max_filesize"] = MAX_VIDEO_BYTES
     try:
         with YoutubeDL(ydl_opts) as ydl:
             ydl.download([video_url])
@@ -243,6 +302,10 @@ async def video_endpoint(video_id: str, height: int = Query(DEFAULT_VIDEO_HEIGHT
         if os.path.exists(tmp_path):
             os.remove(tmp_path)
         raise HTTPException(status_code=500, detail=f"Erreur téléchargement: {e}")
+
+    if _exceeds_limit(os.path.getsize(tmp_path) if os.path.exists(tmp_path) else 0):
+        os.remove(tmp_path)
+        raise HTTPException(status_code=413, detail="Vidéo trop volumineuse")
 
     def file_iter(path):
         with open(path, "rb") as f:
@@ -252,6 +315,5 @@ async def video_endpoint(video_id: str, height: int = Query(DEFAULT_VIDEO_HEIGHT
     return StreamingResponse(
         file_iter(tmp_path),
         media_type="video/mp4",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'}
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
-
