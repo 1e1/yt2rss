@@ -15,12 +15,16 @@ ROOT="$(cd "$(dirname "$0")" && pwd)"
 SRC_DIR="${1:-$ROOT}"
 OUT_DIR="${2:-$ROOT/dist}"
 
-mkdir -p "$OUT_DIR"
-
 if [ ! -f "$SRC_DIR/manifest.json" ]; then
   echo "manifest.json not found in $SRC_DIR" >&2
   exit 1
 fi
+
+mkdir -p "$OUT_DIR"
+# Absolutize: build_target cd's into a temp dir, so a relative OUT_DIR (e.g.
+# "dist") would otherwise resolve against the wrong directory.
+SRC_DIR="$(cd "$SRC_DIR" && pwd)"
+OUT_DIR="$(cd "$OUT_DIR" && pwd)"
 
 build_target() {
   local name="$1" jq_filter="$2"

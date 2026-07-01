@@ -55,12 +55,16 @@ def test_extension_serves_built_zip(client, tmp_path, monkeypatch, browser):
 @pytest.mark.skipif(not (shutil.which("jq") and shutil.which("zip")), reason="jq and zip required")
 def test_build_sh_produces_all_packages(tmp_path):
     src = REPO / "subcRiSS"
-    out = tmp_path / "dist"
-    subprocess.run(
-        ["bash", str(src / "build.sh"), str(src), str(out)],
-        check=True,
+    # Run from a clean cwd with a RELATIVE OUT_DIR, exactly as CI invokes it —
+    # this guards against build_target's `cd` breaking relative output paths.
+    result = subprocess.run(
+        ["bash", str(src / "build.sh"), str(src), "dist"],
+        cwd=tmp_path,
         capture_output=True,
+        text=True,
     )
+    assert result.returncode == 0, result.stderr
+    out = tmp_path / "dist"
     for name in ("firefox.zip", "chrome.zip", "edge.zip"):
         assert (out / name).exists()
     # Edge ships the exact Chromium package.
