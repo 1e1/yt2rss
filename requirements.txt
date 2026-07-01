@@ -1,7 +1,6 @@
-fastapi
-uvicorn[standard]
-yt-dlp
-httpx
-python-dateutil
-aiofiles
-python-memcached
+fastapi>=0.139.0
+uvicorn[standard]>=0.49.0
+yt-dlp>=2026.6.9
+httpx>=0.28.1
+python-memcached>=1.62
+zeroconf>=0.150.0

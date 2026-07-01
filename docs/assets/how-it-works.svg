@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 200" role="img"
+     aria-label="How yt2rss works: a YouTube URL is transformed into an RSS podcast feed">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#8DD3C7"/>
+    </marker>
+    <style>
+      .card { fill:#FFFFFF; stroke:#E3E8EF; stroke-width:1.5; }
+      .hub  { fill:#0F1720; }
+      .t    { font-family:Inter,Helvetica,Arial,sans-serif; fill:#0F1720; }
+      .sub  { font-family:Inter,Helvetica,Arial,sans-serif; fill:#6B7684; font-size:12px; }
+      .white{ fill:#FFFFFF; }
+    </style>
+  </defs>
+
+  <!-- Card 1: YouTube URL -->
+  <rect class="card" x="16" y="60" width="212" height="80" rx="14"/>
+  <rect x="34" y="86" width="30" height="30" rx="8" fill="#E23B2E"/>
+  <path d="M43 93 L43 109 L58 101 Z" class="white"/>
+  <text class="t" x="76" y="96" font-size="16" font-weight="700">YouTube URL</text>
+  <text class="sub" x="76" y="116">youtube.com/@channel</text>
+
+  <line x1="232" y1="100" x2="292" y2="100" stroke="#8DD3C7" stroke-width="3" marker-end="url(#arrow)"/>
+
+  <!-- Hub: yt2rss -->
+  <rect class="hub" x="298" y="52" width="168" height="96" rx="16"/>
+  <text x="382" y="94" text-anchor="middle" font-family="Inter,Helvetica,Arial,sans-serif"
+        font-size="22" font-weight="800" fill="#8DD3C7">yt2rss</text>
+  <text x="382" y="116" text-anchor="middle" class="sub" fill="#9AA4B2">transform · cache · proxy</text>
+
+  <line x1="470" y1="100" x2="530" y2="100" stroke="#8DD3C7" stroke-width="3" marker-end="url(#arrow)"/>
+
+  <!-- Card 3: RSS / podcast -->
+  <rect class="card" x="536" y="60" width="212" height="80" rx="14"/>
+  <rect x="554" y="86" width="30" height="30" rx="8" fill="#F59E0B"/>
+  <g fill="none" stroke="#FFFFFF" stroke-width="3.2" stroke-linecap="round">
+    <path d="M561 108 A6 6 0 0 1 567 114"/>
+    <path d="M561 100 A14 14 0 0 1 575 114"/>
+  </g>
+  <circle cx="561.5" cy="113.5" r="2.4" class="white"/>
+  <text class="t" x="596" y="96" font-size="16" font-weight="700">RSS / podcast</text>
+  <text class="sub" x="596" y="116">add to any player</text>
+</svg>

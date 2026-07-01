@@ -4,21 +4,35 @@
   <meta charset="utf-8">
   <title>subcRiSS — Options</title>
   <style>
-    body { font-family: Arial, sans-serif; padding: 16px; color: #111; }
-    label { display:block; margin-bottom:8px; }
-    input { width: 100%; padding:8px; font-size:14px; }
-    button { margin-top:10px; padding:8px 12px; }
-    .hint { color: #666; font-size:13px; margin-top:6px; }
+    body { font-family: Arial, sans-serif; padding: 16px; color: #111; max-width: 560px; }
+    h2 { margin-top: 0; }
+    .hint { color: #666; font-size: 13px; margin: 6px 0 14px; }
+    ul#servers { list-style: none; padding: 0; margin: 0 0 14px; }
+    ul#servers li { display: flex; align-items: center; gap: 8px; padding: 6px 0; }
+    ul#servers li code { flex: 1; word-break: break-all; }
+    ul#servers li.empty { color: #999; font-style: italic; }
+    .row { display: flex; gap: 8px; }
+    input { flex: 1; padding: 8px; font-size: 14px; }
+    button { padding: 6px 12px; cursor: pointer; }
+    #status { margin-top: 12px; color: green; min-height: 1em; }
   </style>
 </head>
 <body>
   <h2>subcRiSS — Configuration</h2>
-  <label>URL de base yt2rss (ex: http://192.168.1.50:8000)
-    <input id="baseUrl" placeholder="http://192.168.1.50:8000" />
-  </label>
-  <div class="hint">Laissez vide si vous utilisez des routes relatives.</div>
-  <button id="saveBtn">Enregistrer</button>
-  <div id="status" style="margin-top:10px;color:green;"></div>
+  <div class="hint">
+    Astuce : ouvrez la page d'accueil de votre serveur yt2rss et cliquez l'icône
+    de l'extension pour l'enregistrer automatiquement. Vous pouvez aussi l'ajouter
+    ci-dessous. Le serveur sélectionné (radio) est celui utilisé pour générer les flux.
+  </div>
+
+  <ul id="servers"></ul>
+
+  <div class="row">
+    <input id="newServer" placeholder="http://192.168.1.50:2777" />
+    <button id="addBtn">Ajouter</button>
+  </div>
+
+  <div id="status"></div>
 
   <script src="options.js"></script>
 </body>

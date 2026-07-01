@@ -1,3 +1,6 @@
+// Works both on Firefox (`browser.*`) and Chrome (`chrome.*`).
+const browser = globalThis.browser || globalThis.chrome;
+
 // Utility: find channel/author link on YouTube video page or channel page
 function findAuthorUrl() {
   // Attempt: new YouTube layout selectors
@@ -52,6 +55,12 @@ async function copyToClipboard(text) {
   }
 }
 
+// Escape text before injecting it into the toast's innerHTML.
+function escapeToastHtml(s) {
+  return String(s).replace(/[&<>"']/g, (m) =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[m]));
+}
+
 // Show toast (YouTube-like) at top-right
 function showToast(message) {
   // avoid duplicates
@@ -102,25 +111,29 @@ function showToast(message) {
   }, 3200);
 }
 
-// Listener for background messages
-browser.runtime.onMessage.addListener(async (message, sender) => {
+// Listener for background messages.
+// Uses the sendResponse + `return true` pattern so it behaves identically on
+// Firefox and Chrome (Chrome does not support returning a promise here).
+browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (!message || !message.action) return;
 
   if (message.action === "getAuthorUrl") {
-    const author = findAuthorUrl();
-    return author || null;
+    sendResponse(findAuthorUrl() || null);
+    return; // synchronous response
   }
 
   if (message.action === "copyAndToast") {
-    const rssUrl = message.rssUrl;
-    const ok = await copyToClipboard(rssUrl);
-    if (ok) {
-      showToast(`Lien RSS copié : <em>${rssUrl}</em>`);
-    } else {
-      // fallback to opening a prompt to let user copy manually
-      showToast("Impossible de copier automatiquement. Le lien s'affichera dans une fenêtre.");
-      window.prompt("Copiez le lien RSS:", rssUrl);
-    }
-    return;
+    (async () => {
+      const rssUrl = message.rssUrl;
+      const ok = await copyToClipboard(rssUrl);
+      if (ok) {
+        showToast(`Lien RSS copié : <em>${escapeToastHtml(rssUrl)}</em>`);
+      } else {
+        showToast("Impossible de copier automatiquement. Le lien s'affichera dans une fenêtre.");
+        window.prompt("Copiez le lien RSS:", rssUrl);
+      }
+      sendResponse(ok);
+    })();
+    return true; // keep the message channel open for the async response
   }
 });

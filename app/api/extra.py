@@ -1,23 +1,21 @@
 # app/extra.py
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse
-from pathlib import Path
-from main import BASE_DIR
+from settings import BASE_DIR
 
 router = APIRouter(prefix="/extra", tags=["extra"])
 
 EXT_DIR = BASE_DIR / "extra" / "extensions" / "subcRiSS"
+BROWSERS = {"firefox", "chrome", "edge"}
 
-@router.get("/extensions/subcRiSS/firefox.zip")
-async def firefox_extension():
-    file_path = EXT_DIR / "firefox.zip"
-    if not file_path.exists():
-        return {"error": "Firefox extension zip not found."}
-    return FileResponse(path=file_path, filename="subcRiSS-firefox.zip", media_type="application/zip")
 
-@router.get("/extensions/subcRiSS/chrome.zip")
-async def chrome_extension():
-    file_path = EXT_DIR / "chrome.zip"
+@router.get("/extensions/subcRiSS/{browser}.zip")
+async def extension(browser: str):
+    if browser not in BROWSERS:
+        raise HTTPException(status_code=404, detail="Unknown browser package")
+    file_path = EXT_DIR / f"{browser}.zip"
     if not file_path.exists():
-        return {"error": "Chrome extension zip not found."}
-    return FileResponse(path=file_path, filename="subcRiSS-chrome.zip", media_type="application/zip")
+        raise HTTPException(status_code=404, detail=f"{browser} extension zip not found")
+    return FileResponse(
+        path=file_path, filename=f"subcRiSS-{browser}.zip", media_type="application/zip"
+    )

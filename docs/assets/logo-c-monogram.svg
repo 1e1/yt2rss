@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="yt2rss logo — y2r monogram">
+  <rect width="128" height="128" rx="28" fill="#0F1720"/>
+  <rect x="6" y="6" width="116" height="116" rx="24" fill="none" stroke="#1E2A36" stroke-width="2"/>
+  <text x="64" y="80" text-anchor="middle" font-family="Inter, Helvetica, Arial, sans-serif"
+        font-size="52" font-weight="800" letter-spacing="-2" fill="#8DD3C7">y2r</text>
+  <g fill="none" stroke="#F59E0B" stroke-width="6" stroke-linecap="round">
+    <path d="M44 96 A10 10 0 0 1 54 106"/>
+    <path d="M44 84 A22 22 0 0 1 66 106"/>
+  </g>
+  <circle cx="45" cy="105" r="3.5" fill="#F59E0B"/>
+</svg>

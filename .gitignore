@@ -1,2 +1,5 @@
 _DATA/*
 !_DATA/.keep
+subcRiSS/dist/
+__pycache__/
+*.pyc

@@ -3,6 +3,9 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <!-- Handshake marker: the subcRiSS extension detects this to auto-register the server on click. -->
+    <meta name="yt2rss-server" content="1" />
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 128 128'><defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'><stop offset='0' stop-color='%23FF5A3C'/><stop offset='1' stop-color='%23F59E0B'/></linearGradient></defs><rect width='128' height='128' rx='28' fill='url(%23g)'/><path d='M30 38 L30 90 L74 64 Z' fill='%23fff'/><g fill='none' stroke='%23fff' stroke-width='11' stroke-linecap='round'><path d='M74 44 A20 20 0 0 1 94 64'/><path d='M74 26 A38 38 0 0 1 112 64'/></g></svg>" />
     <title>yt2rss — YouTube to RSS</title>
 <style>
   :root{
@@ -118,6 +121,9 @@
     color:var(--muted);
     font-size:12px;
   }
+  footer.small a{ color:var(--accent); text-decoration:none; }
+  footer.small a:hover{ text-decoration:underline; }
+  .ext{ display:block; margin-top:6px; }
 
   /* subtle focus */
   input.output:focus{ box-shadow:0 0 0 4px rgba(141,211,199,0.06); border-color: rgba(141,211,199,0.15); }
@@ -141,7 +147,13 @@
       </div>
     </div>
 
-    <footer class="small">Host used for transformation: <code id="hostUsed"></code></footer>
+    <footer class="small">Host used for transformation: <code id="hostUsed"></code>
+      <span class="ext">Browser extension:
+        <a href="/extra/extensions/subcRiSS/firefox.zip">Firefox</a> ·
+        <a href="/extra/extensions/subcRiSS/chrome.zip">Chrome</a> ·
+        <a href="/extra/extensions/subcRiSS/edge.zip">Edge</a>
+      </span>
+    </footer>
   </div>
 
 <script>

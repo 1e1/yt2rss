@@ -1,33 +1,62 @@
 #!/usr/bin/env bash
-set -e
+set -euo pipefail
 
-SRC_DIR="/build/subcRiSS"
-OUT_DIR="/app/extra/extensions/subcRiSS"
+# Build the subcRiSS browser extensions from a single MV2 source manifest.
+#
+#   ./build.sh [SRC_DIR] [OUT_DIR]
+#
+# Produces:
+#   firefox.zip  -> Manifest V2 (event-page background, browser_action)
+#   chrome.zip   -> Manifest V3 (service-worker background, action, scripting)
+#
+# Requires: jq, zip.
+
+ROOT="$(cd "$(dirname "$0")" && pwd)"
+SRC_DIR="${1:-$ROOT}"
+OUT_DIR="${2:-$ROOT/dist}"
 
 mkdir -p "$OUT_DIR"
 
-echo "🚀 Building subcRiSS extensions for Chrome and Firefox..."
-
-# ---------- Common sanity check ----------
 if [ ! -f "$SRC_DIR/manifest.json" ]; then
-  echo "❌ manifest.json not found in $SRC_DIR"
+  echo "manifest.json not found in $SRC_DIR" >&2
   exit 1
 fi
 
-# ---------- Build Chrome ----------
-echo "🔧 Building Chrome version..."
-cp -r "$SRC_DIR" "$OUT_DIR/chrome"
-jq '.background = { "service_worker": "background.js" } | .manifest_version = 3' \
-  "$SRC_DIR/manifest.json" > "$OUT_DIR/chrome/manifest.json"
-cd "$OUT_DIR/chrome" && zip -r ../chrome.zip . > /dev/null && cd - > /dev/null
+build_target() {
+  local name="$1" jq_filter="$2"
+  local work
+  work="$(mktemp -d)"
+  cp -r "$SRC_DIR/." "$work/"
+  rm -rf "$work/dist"
+  jq "$jq_filter" "$SRC_DIR/manifest.json" > "$work/manifest.json"
+  (
+    cd "$work"
+    rm -f "$OUT_DIR/$name.zip"
+    zip -qr "$OUT_DIR/$name.zip" . \
+      -x "*.DS_Store" -x "*/.git/*" -x "build.sh" -x "readme.md" -x "dist/*"
+  )
+  rm -rf "$work"
+  echo "  - $name: $OUT_DIR/$name.zip"
+}
 
-# ---------- Build Firefox ----------
-echo "🦊 Building Firefox version..."
-cp -r "$SRC_DIR" "$OUT_DIR/firefox"
-jq '.background = { "scripts": ["background.js"] } | .manifest_version = 2' \
-  "$SRC_DIR/manifest.json" > "$OUT_DIR/firefox/manifest.json"
-cd "$OUT_DIR/firefox" && zip -r ../firefox.zip . > /dev/null && cd - > /dev/null
+echo "Building subcRiSS extensions…"
 
-echo "✅ Done."
-echo "   - Firefox: $OUT_DIR/firefox.zip"
-echo "   - Chrome:  $OUT_DIR/chrome.zip"
+# Firefox: keep the source manifest as-is (Manifest V2).
+build_target firefox '.'
+
+# Chrome: derive a Manifest V3 variant.
+build_target chrome '
+  .manifest_version = 3
+  | .action = .browser_action
+  | del(.browser_action)
+  | .background = {"service_worker": "background.js"}
+  | .permissions += ["scripting"]
+  | .host_permissions = ["*://*.youtube.com/*"]
+  | del(.browser_specific_settings)
+'
+
+# Edge (and other Chromium browsers) use the same Manifest V3 package.
+cp "$OUT_DIR/chrome.zip" "$OUT_DIR/edge.zip"
+echo "  - edge: $OUT_DIR/edge.zip"
+
+echo "Done."
